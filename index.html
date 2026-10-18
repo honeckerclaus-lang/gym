@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#150C0C">
+<title>Gym</title>
+<style>
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+:root{--bg:#150C0C;--s:#231815;--ln:#4A2E27;--tx:#EACEAA;--mu:#a58d6f;--ac:#D39858;--bl:#A5BCD6;--rd:#4D0E12;--gr:#8fbf88;color-scheme:dark}
+[hidden]{display:none!important}
+html,body{margin:0;background:var(--bg);color:var(--tx);font:16px/1.3 -apple-system,system-ui,sans-serif}
+body{padding:0 0 calc(70px + env(safe-area-inset-bottom))}
+button,input,select{font:inherit;color:inherit}
+button{background:var(--s);border:1px solid var(--ln);border-radius:10px;padding:11px 12px}
+button:active{opacity:.7}
+header{position:sticky;top:0;z-index:5;background:var(--bg);padding:calc(8px + env(safe-area-inset-top)) 12px 8px;border-bottom:1px solid var(--ln)}
+.seg{display:flex;gap:8px}.seg button{flex:1}
+.seg button.on,.nav button.on{background:var(--ac);color:var(--bg);border-color:var(--ac);font-weight:600}
+.date{position:relative;display:block;margin-top:8px;text-align:center;background:var(--s);border:1px solid var(--ln);border-radius:10px;padding:11px}
+.date input{position:absolute;inset:0;width:100%;height:100%;opacity:0;border:0}
+.card{background:var(--s);border:1px solid var(--ln);border-radius:14px;padding:12px;margin:12px}
+.card.g{background:#1e2b1d;border-color:#4d7a49}
+.hd{display:flex;align-items:center;gap:6px;margin-bottom:6px}
+.hd b{flex:1;font-size:18px}
+.hd button{background:none;border:0;padding:6px 8px;color:var(--mu)}
+.hd .v{color:var(--bl)}
+.ok{color:var(--gr);font-weight:400}
+.hint{font-size:13px;color:var(--gr);margin-bottom:4px}
+.set{display:grid;grid-template-columns:20px 1fr 14px 1fr;gap:8px;align-items:center;margin:6px 0;color:var(--mu)}
+.set i{font-style:normal;text-align:center}
+input,select{width:100%;font-size:17px;padding:10px;border-radius:10px;border:1px solid var(--ln);background:var(--bg);color:var(--tx);text-align:center}
+select{text-align:left;margin-bottom:10px}
+::placeholder{color:#8a8076;opacity:1}
+.act{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
+.up.on{background:#2f4a2c;border-color:#7fae78;color:#d5ecd0}
+.sv{background:var(--ac);color:var(--bg);font-weight:600;border-color:var(--ac)}
+.add{display:grid;grid-template-columns:1fr auto;gap:8px;margin:12px}
+.add input{text-align:left}
+.nav{position:fixed;left:0;right:0;bottom:0;display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:8px 12px calc(8px + env(safe-area-inset-bottom));background:var(--bg);border-top:1px solid var(--ln)}
+table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+th{text-align:left;color:var(--mu);font-weight:400;font-size:13px}
+td,th{padding:8px 4px;border-bottom:1px solid var(--ln);vertical-align:top}
+td button{background:none;border:0;padding:0 6px;color:var(--mu)}
+.gr{color:var(--gr)}.mut{color:var(--mu)}
+svg{width:100%;height:auto;display:block;margin-top:12px}
+svg text{fill:var(--mu);font-size:10px}
+.gl{stroke:var(--ln);stroke-width:1}
+.ln{fill:none;stroke:var(--ac);stroke-width:2.5;stroke-linejoin:round}
+.dt{fill:var(--bl)}
+</style>
+</head>
+<body>
+<header id="top">
+  <div class="seg" id="pl"></div>
+  <label class="date"><span id="dl"></span><input type="date" id="di"></label>
+</header>
+<main id="main"></main>
+<div class="nav seg">
+  <button data-v="t">Training</button>
+  <button data-v="p">Fortschritt</button>
+</div>
+<script>
+const K='gym.v1',$=s=>document.querySelector(s);
+const def=()=>({plan:'p1',plans:{
+  p1:{n:'Upper+Core',e:['Liegestütze','Shoulder Press','Zottman Curls','Skullcrushers','Deadbug','Halos']},
+  p2:{n:'Lower+Back',e:['Leg Extension Machine','Abductor Machine','Adductor Machine','Leg Press','Seated Row']}},logs:{}});
+let db;try{db=JSON.parse(localStorage.getItem(K))}catch(e){}
+if(!db||!db.plans)db=def();
+const save=()=>{try{localStorage.setItem(K,JSON.stringify(db))}catch(e){alert('Speichern fehlgeschlagen')}};
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const iso=d=>new Date(d.getTime()-d.getTimezoneOffset()*6e4).toISOString().slice(0,10);
+const fmt=s=>s.split('-').reverse().join('.');
+const f2=s=>{const a=s.split('-');return a[2]+'.'+a[1]+'.'+a[0].slice(2)};
+const nf=x=>String(x).replace('.',',');
+let date=iso(new Date()),view='t',sel=null,metric='w';
+
+const logs=n=>(db.logs[n]||[]).slice().sort((a,b)=>a.d<b.d?-1:1);
+const prev=(n,d)=>logs(n).filter(e=>e.d<d).pop();
+const cur=(n,d)=>(db.logs[n]||[]).find(e=>e.d===d);
+
+function renderT(){
+  const p=db.plans[db.plan];
+  $('#main').innerHTML=p.e.map((n,i)=>{
+    const c=cur(n,date),l=prev(n,date),s=c?c.s:[],up=c?c.up:false;
+    let rows='';
+    for(let k=0;k<3;k++){
+      const v=s[k]||[],q=(l&&l.s[k])||[];
+      rows+=`<div class="set"><span>${k+1}</span>
+        <input inputmode="decimal" value="${v[0]!=null?nf(v[0]):''}" placeholder="${q[0]!=null?nf(q[0]):'kg'}">
+        <i>×</i>
+        <input inputmode="numeric" value="${v[1]!=null?v[1]:''}" placeholder="${q[1]!=null?q[1]:'Wdh'}"></div>`;
+    }
+    return `<div class="card${up?' g':''}" data-i="${i}">
+      <div class="hd"><b>${esc(n)}${c?' <span class="ok">✓</span>':''}</b>
+        <button class="v" data-act="h">Verlauf</button><button data-act="x">×</button></div>
+      ${l&&l.up?`<div class="hint">Letztes Mal (${fmt(l.d)}): Gewicht steigern ↑</div>`:''}
+      ${rows}
+      <div class="act"><button class="up${up?' on':''}" data-act="u">↑ Steigern</button>
+      <button class="sv" data-act="s">${c?'Aktualisieren':'Speichern'}</button></div></div>`;
+  }).join('')+`<div class="add"><input id="new" placeholder="Übung hinzufügen"><button data-act="add">+</button></div>`;
+}
+
+function saveEx(card,n,b){
+  const ins=[...card.querySelectorAll('.set input')],s=[];
+  const g=(i)=>{const x=parseFloat((i.value||i.placeholder).replace(',','.'));return isNaN(x)?null:x};
+  for(let k=0;k<3;k++){const w=g(ins[k*2]),r=g(ins[k*2+1]);s.push(w==null&&r==null?null:[w??0,r??0])}
+  if(s.every(x=>!x)){b.textContent='Nichts einzutragen';return}
+  const up=card.querySelector('.up').classList.contains('on');
+  const L=db.logs[n]=(db.logs[n]||[]).filter(e=>e.d!==date);
+  L.push({d:date,s,up});save();render();
+}
+
+function chart(L,val){
+  if(!L.length)return '<p class="mut">Noch keine Einträge.</p>';
+  const W=340,H=190,pl=40,pr=12,pt=14,pb=26,v=L.map(val);
+  const mn=Math.min(...v),mx=Math.max(...v),lo=mn===mx?mn-1:mn,hi=mn===mx?mx+1:mx;
+  const t=L.map(e=>Date.parse(e.d)),t0=t[0],t1=t[t.length-1];
+  const X=i=>pl+(t1===t0?(W-pl-pr)/2:(t[i]-t0)/(t1-t0)*(W-pl-pr));
+  const Y=x=>pt+(1-(x-lo)/(hi-lo))*(H-pt-pb);
+  let g='';
+  [lo,(lo+hi)/2,hi].forEach(x=>{g+=`<line class="gl" x1="${pl}" x2="${W-pr}" y1="${Y(x)}" y2="${Y(x)}"/><text x="${pl-5}" y="${Y(x)+4}" text-anchor="end">${Math.round(x*10)/10}</text>`});
+  const pts=L.map((e,i)=>[X(i).toFixed(1),Y(v[i]).toFixed(1)]);
+  return `<svg viewBox="0 0 ${W} ${H}">${g}<polyline class="ln" points="${pts.map(p=>p.join(',')).join(' ')}"/>
+    ${pts.map(p=>`<circle class="dt" cx="${p[0]}" cy="${p[1]}" r="3.5"/>`).join('')}
+    <text x="${pl}" y="${H-6}">${f2(L[0].d)}</text><text x="${W-pr}" y="${H-6}" text-anchor="end">${f2(L[L.length-1].d)}</text></svg>`;
+}
+
+function renderP(){
+  const all=[...new Set([...Object.values(db.plans).flatMap(p=>p.e),...Object.keys(db.logs)])];
+  if(!all.includes(sel))sel=all[0];
+  if(!sel){$('#main').innerHTML='<p class="mut" style="margin:16px">Keine Übungen.</p>';return}
+  const L=logs(sel);
+  const val=e=>metric==='w'?Math.max(0,...e.s.filter(Boolean).map(x=>x[0])):e.s.filter(Boolean).reduce((a,x)=>a+x[0]*x[1],0);
+  const rows=L.slice().reverse().map(e=>`<tr><td>${fmt(e.d)}${e.up?' <span class="gr">↑</span>':''}</td>
+    <td>${e.s.map(x=>x?nf(x[0])+'×'+x[1]:'–').join(' · ')}</td>
+    <td><button data-act="d" data-d="${e.d}">×</button></td></tr>`).join('');
+  $('#main').innerHTML=`<div class="card">
+    <select id="ex">${all.map(x=>`<option${x===sel?' selected':''}>${esc(x)}</option>`).join('')}</select>
+    <div class="seg"><button data-m="w" class="${metric==='w'?'on':''}">Max-Gewicht</button><button data-m="v" class="${metric==='v'?'on':''}">Volumen</button></div>
+    ${chart(L,val)}</div>
+    <div class="card">${L.length?`<table><tr><th>Datum</th><th>Sätze (kg × Wdh)</th><th></th></tr>${rows}</table>`:'<span class="mut">Noch keine Einträge.</span>'}</div>`;
+}
+
+function render(){
+  $('#top').hidden=view!=='t';
+  $('#pl').innerHTML=Object.keys(db.plans).map(k=>`<button data-p="${k}" class="${k===db.plan?'on':''}">${esc(db.plans[k].n)}</button>`).join('');
+  $('#dl').textContent=fmt(date);$('#di').value=date;
+  document.querySelectorAll('.nav button').forEach(b=>b.classList.toggle('on',b.dataset.v===view));
+  view==='t'?renderT():renderP();
+}
+
+$('#pl').onclick=e=>{const k=e.target.dataset.p;if(k){db.plan=k;save();render()}};
+$('#di').onchange=e=>{if(e.target.value){date=e.target.value;render()}};
+document.querySelector('.nav').onclick=e=>{const v=e.target.dataset.v;if(v){view=v;render()}};
+$('#main').onchange=e=>{if(e.target.id==='ex'){sel=e.target.value;render()}};
+$('#main').onclick=e=>{
+  const b=e.target.closest('button');if(!b)return;
+  if(b.dataset.m){metric=b.dataset.m;render();return}
+  const card=b.closest('.card'),a=b.dataset.act;
+  const n=card&&card.dataset.i!=null?db.plans[db.plan].e[card.dataset.i]:null;
+  if(a==='u'){b.classList.toggle('on');card.classList.toggle('g')}
+  else if(a==='s')saveEx(card,n,b);
+  else if(a==='x'){if(confirm('„'+n+'“ aus dem Plan löschen? (Einträge bleiben erhalten)')){db.plans[db.plan].e.splice(card.dataset.i,1);save();render()}}
+  else if(a==='h'){sel=n;view='p';render()}
+  else if(a==='add'){const v=$('#new').value.trim();if(v){db.plans[db.plan].e.push(v);save();render()}}
+  else if(a==='d'){if(confirm('Eintrag vom '+fmt(b.dataset.d)+' löschen?')){db.logs[sel]=db.logs[sel].filter(x=>x.d!==b.dataset.d);save();render()}}
+};
+render();
+</script>
+</body>
+</html><script>if('serviceWorker' in navigator)navigator.serviceWorker.register('sw.js')</script>
